@@ -1,4 +1,4 @@
-import { SPECIALIST_ROLES, type SpecialistId } from "../agents/registry.js";
+import { SPECIALIST_ROLES, type SpecialistId } from "../agents/registry";
 
 export interface NormalizedRequest {
   text: string;
