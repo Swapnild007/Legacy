@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { routeRequest, type NormalizedRequest } from "../../../src/orchestration/router";
 import { buildExecutionPlan } from "../../../src/orchestration/planner";
 import { getSpecialist, type SpecialistId } from "../../../src/agents/registry";
+import { calculate } from "../../../src/tools/calculator";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -135,6 +136,31 @@ export async function POST(request: Request) {
     const latest = [...messages].reverse().find((message) => message.role === "user");
     if (!latest) {
       return NextResponse.json({ error: "A user message is required." }, { status: 400 });
+    }
+
+    // Explicit deterministic tool invocation. This path executes locally and does not
+    // send the expression to a model or evaluate arbitrary JavaScript.
+    const calculationMatch = latest.content.match(/^\\s*calculate\\s*:\\s*([\\s\\S]+)$/i);
+    if (calculationMatch) {
+      try {
+        const result = calculate(calculationMatch[1]!);
+        return NextResponse.json({
+          answer: `Result: ${result.value}`,
+          provider: "Legacy Tool Runtime",
+          model: "safe-calculator-v1",
+          specialists: ["data-analysis"],
+          strategy: "single",
+          capabilities: {
+            webSearchAvailable: Boolean(process.env.OPENROUTER_API_KEY),
+            webSearchEnabledForRequest: false,
+            toolsExecuted: [{ name: "calculator", status: "completed", expression: result.expression, result: result.value }]
+          }
+        }, { headers: { "Cache-Control": "no-store" } });
+      } catch (error) {
+        return NextResponse.json({
+          error: error instanceof Error ? error.message : "Invalid calculation."
+        }, { status: 400 });
+      }
     }
 
     const normalized: NormalizedRequest = { text: latest.content };
