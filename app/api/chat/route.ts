@@ -146,13 +146,15 @@ export async function POST(request: Request) {
     }));
     const canSearchWeb = provider.name === "OpenRouter";
     let answer: string;
-    let webSearchRequested = false;
+    const webSearchRequested = canSearchWeb && plan.tasks.some((task) => {
+      const specialist = getSpecialist(task.specialist);
+      return specialist?.id === "research" || specialist?.id === "browser";
+    });
 
     if (plan.tasks.length === 1) {
       const task = plan.tasks[0]!;
       const role = getSpecialist(task.specialist)!;
       const enableWebSearch = canSearchWeb && (role.id === "research" || role.id === "browser");
-      webSearchRequested = enableWebSearch;
       answer = await complete(provider, [
         {
           role: "system",
@@ -168,7 +170,6 @@ export async function POST(request: Request) {
       const findings = await Promise.all(plan.tasks.map(async (task) => {
         const role = getSpecialist(task.specialist)!;
         const enableWebSearch = canSearchWeb && (role.id === "research" || role.id === "browser");
-        if (enableWebSearch) webSearchRequested = true;
         const result = await complete(provider, [
           {
             role: "system",
