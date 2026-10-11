@@ -1,5 +1,5 @@
-import { getSpecialist, type SpecialistId } from "../agents/registry.js";
-import type { NormalizedRequest, RoutingDecision } from "./router.js";
+import { getSpecialist, type SpecialistId } from "../agents/registry";
+import type { NormalizedRequest, RoutingDecision } from "./router";
 
 export interface PlannedTask {
   id: string;
