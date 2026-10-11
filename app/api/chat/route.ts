@@ -138,6 +138,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "A user message is required." }, { status: 400 });
     }
 
+    // Answer simple date/time questions deterministically instead of waiting for an LLM.
+    const asksCurrentDate = /\\b(what(?:'s| is)\\s+)?today'?s?\\s+date\\b|\\bcurrent date\\b|\\bwhat day is it today\\b/i.test(latest.content);
+    if (asksCurrentDate) {
+      const now = new Date();
+      const date = new Intl.DateTimeFormat("en-IN", {
+        timeZone: "Asia/Kolkata",
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      }).format(now);
+      return NextResponse.json({
+        answer: `Today is ${date} (India Standard Time).`,
+        provider: "Legacy Tool Runtime",
+        model: "date-time-v1",
+        specialists: ["planning"],
+        strategy: "single",
+        capabilities: {
+          webSearchAvailable: Boolean(process.env.OPENROUTER_API_KEY),
+          webSearchEnabledForRequest: false,
+          toolsExecuted: [{ name: "current-date", status: "completed", timezone: "Asia/Kolkata" }]
+        }
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
+
     // Explicit deterministic tool invocation. This path executes locally and does not
     // send the expression to a model or evaluate arbitrary JavaScript.
     const calculationMatch = latest.content.match(/^\\s*calculate\\s*:\\s*([\\s\\S]+)$/i);
