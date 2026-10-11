@@ -1,4 +1,4 @@
-import type { SpecialistId } from "../agents/registry.js";
+import type { SpecialistId } from "../agents/registry";
 
 export type ActionRisk = "low" | "moderate" | "high" | "critical";
 
