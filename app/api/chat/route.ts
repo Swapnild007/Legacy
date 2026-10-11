@@ -11,7 +11,7 @@ function getProvider():Provider|null{
  if(process.env.GEMINI_API_KEY)return{name:"Gemini",model:process.env.GEMINI_MODEL||"gemini-2.5-flash",endpoint:"https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",key:process.env.GEMINI_API_KEY};return null;
 }
 async function complete(provider:Provider,messages:Array<{role:"system"|"user"|"assistant";content:string}>,temperature=0.3):Promise<string>{
- const response=await fetch(provider.endpoint,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${provider.key}`},body:JSON.stringify({model:provider.model,messages,temperature,max_tokens:1800}),signal:AbortSignal.timeout(45000),cache:"no-store"});
+ const response=await fetch(provider.endpoint,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${provider.key}`},body:JSON.stringify({model:provider.model,messages,temperature,max_tokens:1800}),signal:AbortSignal.timeout(20000),cache:"no-store"});
  if(!response.ok){const detail=(await response.text()).slice(0,300);throw new Error(`${provider.name} returned HTTP ${response.status}: ${detail}`);}
  const data=await response.json() as {choices?:Array<{message?:{content?:string|Array<{text?:string}>}}>} ;const content=data.choices?.[0]?.message?.content;
  if(typeof content==="string"&&content.trim())return content.trim();if(Array.isArray(content)){const joined=content.map(part=>part.text??"").join("").trim();if(joined)return joined;}throw new Error("The provider returned no text content.");
