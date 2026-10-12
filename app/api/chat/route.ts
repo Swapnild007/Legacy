@@ -221,7 +221,7 @@ export async function POST(request: Request) {
     } else {
       const findings = await Promise.all(plan.tasks.map(async (task) => {
         const role = getSpecialist(task.specialist)!;
-        const enableWebSearch = canSearchWeb && (role.id === "research" || role.id === "browser");
+        const enableWebSearch = canSearchWeb && (isTravelRequest || role.id === "research" || role.id === "browser");
         const result = await complete(provider, [
           {
             role: "system",
