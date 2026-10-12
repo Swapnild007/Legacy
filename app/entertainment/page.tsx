@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-type Category = "All" | "Movies & Shows" | "Live TV" | "Marathi" | "Hindi" | "News" | "Devotional";
+type Category = "All" | "Movies & Shows" | "Live TV" | "Marathi" | "Hindi" | "English" | "News" | "Devotional";
 type Provider = {
   title: string; description: string; category: Exclude<Category, "All">[];
   languages: string[]; kind: "Movies & Shows" | "Live TV" | "Mixed";
