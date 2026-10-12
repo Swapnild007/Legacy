@@ -140,7 +140,8 @@ export async function POST(request: Request) {
 
     // Answer simple date/time questions deterministically instead of waiting for an LLM.
     const asksCurrentDate = /\b(what(?:'s| is)\s+)?today'?s?\s+date\b|\bcurrent date\b|\bwhat day is it today\b/i.test(latest.content);
-    if (asksCurrentDate) {
+    const asksCurrentTime = /\\b(exact\\s+)?(current\\s+)?time\\s+(now|right\\s+now)\\b|\\bwhat\\s+time\\s+is\\s+it\\b|\\bcurrent\\s+time\\b/i.test(latest.content);
+    if (asksCurrentDate || asksCurrentTime) {
       const now = new Date();
       const date = new Intl.DateTimeFormat("en-IN", {
         timeZone: "Asia/Kolkata",
@@ -149,8 +150,20 @@ export async function POST(request: Request) {
         month: "long",
         year: "numeric"
       }).format(now);
+      const time = new Intl.DateTimeFormat("en-IN", {
+        timeZone: "Asia/Kolkata",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23"
+      }).format(now);
+      const answer = asksCurrentDate && asksCurrentTime
+        ? `It is ${time} IST on ${date}.`
+        : asksCurrentTime
+          ? `The current time is ${time} IST (${date}).`
+          : `Today is ${date} (India Standard Time).`;
       return NextResponse.json({
-        answer: `Today is ${date} (India Standard Time).`,
+        answer,
         provider: "Legacy Tool Runtime",
         model: "date-time-v1",
         specialists: ["planning"],
@@ -158,10 +171,15 @@ export async function POST(request: Request) {
         capabilities: {
           webSearchAvailable: Boolean(process.env.OPENROUTER_API_KEY),
           webSearchEnabledForRequest: false,
-          toolsExecuted: [{ name: "current-date", status: "completed", timezone: "Asia/Kolkata" }]
+          toolsExecuted: [{ name: asksCurrentTime ? "current-date-time" : "current-date", status: "completed", timezone: "Asia/Kolkata" }]
         }
       }, { headers: { "Cache-Control": "no-store" } });
     }
+
+    /* legacy date block removed */
+    if (false) {
+      const now = new Date();
+
 
     // Explicit deterministic tool invocation. This path executes locally and does not
     // send the expression to a model or evaluate arbitrary JavaScript.
