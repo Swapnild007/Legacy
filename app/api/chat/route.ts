@@ -141,7 +141,8 @@ export async function POST(request: Request) {
     // Answer simple date/time questions deterministically instead of waiting for an LLM.
     const asksCurrentDate = /\b(what(?:'s| is)\s+)?today'?s?\s+date\b|\bcurrent date\b|\bwhat day is it today\b/i.test(latest.content);
     const asksCurrentTime = /\b(exact\s+)?(current\s+)?time\s+(now|right\s+now)\b|\bwhat\s+time\s+is\s+it\b|\bcurrent\s+time\b/i.test(latest.content);
-    if (asksCurrentDate || asksCurrentTime) {
+    const isStandaloneDateTimeQuestion = latest.content.trim().length <= 100 && /^(?:hi\s+)?(?:what(?:\s+is|'s)?\s+)?(?:today(?:'s)?\s+date|current\s+date|what\s+day\s+is\s+it(?:\s+today)?|(?:exact\s+)?(?:current\s+)?time(?:\s+now|\s+right\s+now)?|what\s+time\s+is\s+it)(?:\s+in\s+india)?[?.!\s]*$/i.test(latest.content.trim());
+    if (isStandaloneDateTimeQuestion && (asksCurrentDate || asksCurrentTime)) {
       const now = new Date();
       const date = new Intl.DateTimeFormat("en-IN", {
         timeZone: "Asia/Kolkata",
