@@ -176,11 +176,6 @@ export async function POST(request: Request) {
       }, { headers: { "Cache-Control": "no-store" } });
     }
 
-    /* legacy date block removed */
-    if (false) {
-      const now = new Date();
-
-
     // Explicit deterministic tool invocation. This path executes locally and does not
     // send the expression to a model or evaluate arbitrary JavaScript.
     const calculationMatch = latest.content.match(/^\s*calculate\s*:\s*([\s\S]+)$/i);
@@ -215,8 +210,9 @@ export async function POST(request: Request) {
     }));
     const canSearchWeb = provider.name === "OpenRouter";
     const isTravelRequest = /\b(travel|trip|itinerary|accommodation|hotel|crowd|tourism|tourist|pilgrimage|temple visit|train tickets|bus tickets)\b/i.test(latest.content);
+    const isKnowledgeDomainRequest = /\b(history|historical|geography|geographic|language|linguistics|currency|currencies|finance|financial|economy|economic|economics|science|scientific|culture|cultural|politics|political|law|legal|medicine|medical|health|technology|technology|climate|environment|demographics|religion|philosophy|education|business|markets|stock|stocks|exchange rate|inflation|gdp|trade|government|constitution|architecture|art|literature|mathematics|physics|chemistry|biology|astronomy)\b/i.test(latest.content);
     let answer: string;
-    const webSearchRequested = canSearchWeb && (isTravelRequest || plan.tasks.some((task) => {
+    const webSearchRequested = canSearchWeb && (isTravelRequest || isKnowledgeDomainRequest || plan.tasks.some((task) => {
       const specialist = getSpecialist(task.specialist);
       return specialist?.id === "research" || specialist?.id === "browser";
     }));
@@ -224,7 +220,7 @@ export async function POST(request: Request) {
     if (plan.tasks.length === 1) {
       const task = plan.tasks[0]!;
       const role = getSpecialist(task.specialist)!;
-      const enableWebSearch = canSearchWeb && (isTravelRequest || role.id === "research" || role.id === "browser");
+      const enableWebSearch = canSearchWeb && (isTravelRequest || isKnowledgeDomainRequest || role.id === "research" || role.id === "browser");
       answer = await complete(provider, [
         {
           role: "system",
