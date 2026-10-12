@@ -11,32 +11,33 @@ type ChatMessage = { role: "user" | "assistant"; content: string };
 type Provider = { name: string; model: string; endpoint: string; key: string };
 type ProviderMessage = { role: "system" | "user" | "assistant"; content: string };
 
-function getProvider(): Provider | null {
+function getProviders(): Provider[] {
+  const providers: Provider[] = [];
   if (process.env.OPENROUTER_API_KEY) {
-    return {
+    providers.push({
       name: "OpenRouter",
       model: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
       endpoint: "https://openrouter.ai/api/v1/chat/completions",
       key: process.env.OPENROUTER_API_KEY
-    };
+    });
   }
   if (process.env.GROQ_API_KEY) {
-    return {
+    providers.push({
       name: "Groq",
       model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
       endpoint: "https://api.groq.com/openai/v1/chat/completions",
       key: process.env.GROQ_API_KEY
-    };
+    });
   }
   if (process.env.GEMINI_API_KEY) {
-    return {
+    providers.push({
       name: "Gemini",
       model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
       endpoint: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
       key: process.env.GEMINI_API_KEY
-    };
+    });
   }
-  return null;
+  return providers;
 }
 
 async function complete(
@@ -89,6 +90,31 @@ async function complete(
   throw new Error("The provider returned no text content.");
 }
 
+
+async function completeWithFallback(
+  providers: Provider[],
+  messages: ProviderMessage[],
+  temperature = 0.3,
+  enableWebSearch = false
+): Promise<string> {
+  const failures: string[] = [];
+  for (const provider of providers) {
+    try {
+      // Search tools are only supported by OpenRouter; other providers receive a
+      // normal chat-completions request during fallback.
+      return await complete(provider, messages, temperature, enableWebSearch && provider.name === "OpenRouter");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(message);
+      // Retry another configured provider for credit exhaustion, rate limits,
+      // transient server errors, timeouts, or provider-side failures.
+      const retryable = /HTTP (402|408|409|425|429|5\d\d)|timed out|fetch failed|network/i.test(message);
+      if (!retryable) throw error;
+    }
+  }
+  throw new Error(`All configured AI providers failed. ${failures.join(" | ")}`);
+}
+
 const roleInstructions: Record<SpecialistId, string> = {
   research: "Research: separate facts from assumptions, cite sources actually retrieved, and never invent sources.",
   "data-analysis": "Data analysis: show methods, calculations, assumptions and limitations. Never invent data.",
@@ -110,7 +136,8 @@ const base = `You are Legacy, an agentic AI platform. Be helpful, precise, and t
 
 export async function POST(request: Request) {
   try {
-    const provider = getProvider();
+    const providers = getProviders();
+    const provider = providers[0];
     if (!provider) {
       return NextResponse.json({
         error: "Legacy's AI runtime is not configured. Add OPENROUTER_API_KEY, GROQ_API_KEY, or GEMINI_API_KEY to Vercel Environment Variables and redeploy."
@@ -222,7 +249,7 @@ export async function POST(request: Request) {
       const task = plan.tasks[0]!;
       const role = getSpecialist(task.specialist)!;
       const enableWebSearch = canSearchWeb && (isTravelRequest || isKnowledgeDomainRequest || role.id === "research" || role.id === "browser");
-      answer = await complete(provider, [
+      answer = await completeWithFallback(providers, [
         {
           role: "system",
           content: `${base}\n${isTravelRequest ? "For travel planning, use current-year dates; research current transport, official timings, accommodation areas, food, safety and crowd advisories when web search is available. Cite source URLs, separate verified facts from estimates, and never invent ticket prices, availability or crowd forecasts. If the date range is ambiguous or already passed, explicitly clarify instead of silently choosing a year. " : ""}Active specialist: ${role.name}. ${roleInstructions[role.id]}\n${enableWebSearch
@@ -237,7 +264,7 @@ export async function POST(request: Request) {
       const findings = await Promise.all(plan.tasks.map(async (task) => {
         const role = getSpecialist(task.specialist)!;
         const enableWebSearch = canSearchWeb && (isTravelRequest || isKnowledgeDomainRequest || role.id === "research" || role.id === "browser");
-        const result = await complete(provider, [
+        const result = await completeWithFallback(providers, [
           {
             role: "system",
             content: `${base}\n${isTravelRequest ? "For travel planning, use current-year dates; research current transport, official timings, accommodation areas, food, safety and crowd advisories when web search is available. Cite source URLs, separate verified facts from estimates, and never invent ticket prices, availability or crowd forecasts. If the date range is ambiguous or already passed, explicitly clarify instead of silently choosing a year. " : ""}You are the ${role.name}. ${roleInstructions[role.id]} Focus on your contribution, be concise and mark uncertainty. ${enableWebSearch
@@ -253,7 +280,7 @@ export async function POST(request: Request) {
         return { specialist: role.name, result };
       }));
 
-      answer = await complete(provider, [
+      answer = await completeWithFallback(providers, [
         {
           role: "system",
           content: `${base}\nYou are Legacy's synthesis and verification layer. Reconcile specialist findings, remove duplication, flag disagreements and unsupported claims, and produce one coherent answer. Preserve source URLs from research findings. Never imply proposed actions were executed.`
