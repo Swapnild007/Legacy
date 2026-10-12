@@ -95,14 +95,17 @@ async function completeWithFallback(
   providers: Provider[],
   messages: ProviderMessage[],
   temperature = 0.3,
-  enableWebSearch = false
+  enableWebSearch = false,
+  onProviderUsed?: (provider: Provider) => void
 ): Promise<string> {
   const failures: string[] = [];
   for (const provider of providers) {
     try {
       // Search tools are only supported by OpenRouter; other providers receive a
       // normal chat-completions request during fallback.
-      return await complete(provider, messages, temperature, enableWebSearch && provider.name === "OpenRouter");
+      const answer = await complete(provider, messages, temperature, enableWebSearch && provider.name === "OpenRouter");
+      onProviderUsed?.(provider);
+      return answer;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       failures.push(message);
@@ -143,6 +146,9 @@ export async function POST(request: Request) {
         error: "Legacy's AI runtime is not configured. Add OPENROUTER_API_KEY, GROQ_API_KEY, or GEMINI_API_KEY to Vercel Environment Variables and redeploy."
       }, { status: 503 });
     }
+
+    const usedProviders = new Map<string, string>();
+    const noteProvider = (used: Provider) => usedProviders.set(used.name, used.model);
 
     const body = await request.json() as { messages?: ChatMessage[] };
     if (!Array.isArray(body.messages) || !body.messages.length) {
@@ -259,7 +265,7 @@ export async function POST(request: Request) {
               : "No web-search tool is connected to this provider in this runtime."}\nIf an external action is unsupported by a connected tool, say so and give the next step.`
         },
         ...conversation
-      ], 0.3, enableWebSearch);
+      ], 0.3, enableWebSearch, noteProvider);
     } else {
       const findings = await Promise.all(plan.tasks.map(async (task) => {
         const role = getSpecialist(task.specialist)!;
@@ -289,13 +295,13 @@ export async function POST(request: Request) {
           role: "user",
           content: `Original request:\n${latest.content}\n\nSpecialist findings:\n${findings.map((finding) => `### ${finding.specialist}\n${finding.result}`).join("\n\n")}\n\nSynthesize a reliable, actionable response. Keep useful source links.`
         }
-      ], 0.2);
+      ], 0.2, false, noteProvider);
     }
 
     return NextResponse.json({
       answer,
-      provider: provider.name,
-      model: provider.model,
+      provider: [...usedProviders.keys()].join(" → ") || provider.name,
+      model: [...usedProviders.values()].join(" → ") || provider.model,
       specialists: routing.specialists,
       strategy: plan.strategy,
       capabilities: {
