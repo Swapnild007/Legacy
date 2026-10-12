@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateImage, type ImageQuality, type ImageSize } from "@/lib/image-studio/provider";
+import { generateImage, type ImageQuality, type ImageSize } from "../../../../lib/image-studio/provider";
 
 export const runtime = "nodejs";
 export const maxDuration = 150;
